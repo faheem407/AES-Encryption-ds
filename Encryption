@@ -1,0 +1,165 @@
+
+import os  # Import the os module for generating random bytes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes  # Import cryptography primitives for ciphers
+from cryptography.hazmat.primitives import padding  # Import padding functions for block ciphers
+from cryptography.hazmat.backends import default_backend  # Import the default backend for cryptographic algorithms
+import os  # Redundant import, already imported above
+from cryptography.hazmat.primitives import serialization  # Import serialization for key serialization
+from cryptography.hazmat.primitives import hashes  # Import hashes for cryptographic hashing
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding  # Import asymmetric padding for RSA encryption/decryption
+from cryptography.hazmat.primitives.asymmetric import rsa  # Import RSA for RSA key generation
+
+#This Function to generate a 256-bit (32 byte) random key
+def generate_key():
+    return os.urandom(32)
+
+# This Function to pad data to a multiple of block size
+def pad(data):
+    padder = padding.PKCS7(128).padder()  # Create a PKCS7 padder for 128-bit block size
+    padded_data = padder.update(data) + padder.finalize()  # Pad the data and finalize the padding
+    return padded_data
+
+# This Function to remove padding from data
+def unpad(padded_data):
+    unpadder = padding.PKCS7(128).unpadder()  # Create a PKCS7 unpadder
+    return unpadder.update(padded_data) + unpadder.finalize()  # Unpad the data and finalize
+
+# This Function to encrypt data using AES with CBC mode
+def encrypt(data, key):
+    iv = os.urandom(16)  # Generate a random 16-byte IV
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())  # Create a cipher object
+    encryptor = cipher.encryptor()  # Create an encryptor object
+    padded_data = pad(data)  # Pad the data
+    ciphertext = encryptor.update(padded_data) + encryptor.finalize()  # Encrypt the data
+    return iv + ciphertext  # Prepend IV to ciphertext
+
+#This Function to decrypt data encrypted using AES with CBC mode
+def decrypt(encrypted_data, key):
+    iv = encrypted_data[:16]  # Extract the IV from the encrypted data
+    ciphertext = encrypted_data[16:]  # Extract the ciphertext
+    cipher = Cipher(algorithms.AES(key), modes.CBC(iv), backend=default_backend())  # Create a cipher object
+    decryptor = cipher.decryptor()  # Create a decryptor object
+    padded_data = decryptor.update(ciphertext) + decryptor.finalize()  # Decrypt the data
+    return unpad(padded_data)  # Unpad the decrypted data
+
+# This Function to read binary data from a file
+def read_data_fromsavedfile(file_path):
+    with open(file_path, 'rb') as file:  # Open file in binary read mode
+        return file.read()  # Read and return the file's contents
+
+#This Function to write binary data to a file
+def write_data_fromsavedfile(file_path, data):
+    with open(file_path, 'wb') as file:  # Open file in binary write mode
+        file.write(data)  # Write data to file
+
+#This  Generate and save keys for two users
+user1_key = generate_key()  # Generate key for user 1
+with open("key1.pem", 'wb') as file:  # Save key for user 1
+    file.write(user1_key)
+user2_key = generate_key()  # Generate key for user 2
+with open("key2.pem", 'wb') as file:  # Save key for user 2
+    file.write(user2_key)
+
+#This read data from a file to be encrypted
+input_file_path = 'file.txt'  # Define the input file path
+original_data = read_data_fromsavedfile(input_file_path)  # Read data from the file
+
+# This encrypt data for user 1 and save it
+encrypted_data_user1 = encrypt(original_data, user1_key)  # Encrypt data for user 1
+encrypted_file_path_user1 = 'encrypted_file1.bin'  # Define encrypted file path for user 1
+write_data_fromsavedfile(encrypted_file_path_user1, encrypted_data_user1)  # Save encrypted data for user 1
+
+# This encrypt data for user 2 and save it
+encrypted_data_user2 = encrypt(original_data, user2_key)  # Encrypt data for user 2
+encrypted_file_path_user2 = 'encrypted_file2.bin'  # Define encrypted file path for user 2
+write_data_fromsavedfile(encrypted_file_path_user2
+
+, encrypted_data_user2)  # Save encrypted data for user 2
+
+# This decrypt data for user 1 and save it
+decrypted_data_user1 = decrypt(encrypted_data_user1, user1_key)  # Decrypt data for user 1
+decrypted_file_path_user1 = 'decrypted_file1.txt'  # Define decrypted file path for user 1
+write_data_fromsavedfile(decrypted_file_path_user1, decrypted_data_user1)  # Save decrypted data for user 1
+
+# This decrypt data for user 2 and save it
+decrypted_data_user2 = decrypt(encrypted_data_user2, user2_key)  # Decrypt data for user 2
+decrypted_file_path_user2 = 'decrypted_file2.txt'  # Define decrypted file path for user 2
+write_data_fromsavedfile(decrypted_file_path_user2, decrypted_data_user2)  # Save decrypted data for user 2
+
+# This function to generate an RSA key pair
+def generate_rsa_key_pair_ds():
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,  # Define the public exponent
+        key_size=2048,  # Define the key size
+        backend=default_backend()  # Use the default backend
+    )
+    public_key = private_key.public_key()  # Derive the public key from the private key
+    return private_key, public_key  # Return the key pair
+
+# This function to sign data using RSA
+def sign_data(private_key, data):
+    signature = private_key.sign(
+        data,  # Data to be signed
+        asym_padding.PSS(  # Padding scheme
+            mgf=asym_padding.MGF1(hashes.SHA256()),  # Mask generation function
+            salt_length=asym_padding.PSS.MAX_LENGTH  # Salt length
+        ),
+        hashes.SHA256()  # This Hash to check the integrity of algorithm
+    )
+    return signature  # Return the signature
+
+# This function is to verify an RSA signature
+def verify_signature(public_key, signature, data):
+    try:
+        public_key.verify(
+            signature,  # This verifies the Signature 
+            data,  # Here data has been signed here 
+            asym_padding.PSS(  # Padding scheme
+                mgf=asym_padding.MGF1(hashes.SHA256()),  #This is Mask generation function
+                salt_length=asym_padding.PSS.MAX_LENGTH  # Salt length
+            ),
+            hashes.SHA256()  # Hash algorithm
+        )
+        return True  # Return True if verification succeeds
+    except Exception:
+        return False  # Return False if verification fails
+
+# This line of code Generate RSA key pairs for two users
+user1_private_key, user1_public_key = generate_rsa_key_pair_ds()  # Generate key pair for user 1
+user2_private_key, user2_public_key = generate_rsa_key_pair_ds()  # Generate key pair for user 2
+
+#This is the Function to save an RSA key to a file
+def save_rsa_key(key, filename, private_key=True):
+    if private_key:
+        pem = key.private_bytes(
+            encoding=serialization.Encoding.PEM,  # PEM encoding
+            format=serialization.PrivateFormat.PKCS8,  # PKCS8 format for private keys
+            encryption_algorithm=serialization.NoEncryption()  # No additional encryption
+        )
+    else:
+        pem = key.public_bytes(
+            encoding=serialization.Encoding.PEM,  # PEM encoding
+            format=serialization.PublicFormat.SubjectPublicKeyInfo  # SubjectPublicKeyInfo format for public keys
+        )
+    with open(filename, 'wb') as pem_out:  # Write the key to a file
+        pem_out.write(pem)
+
+#  This save RSA keys for user 1 to files
+save_rsa_key(user1_private_key, 'user1_private_key.pem')  # Save user 1's private key
+save_rsa_key(user1_public_key, 'user1_public_key.pem', private_key=False)  # Save user 1's public key
+
+# This save RSA keys for user 2 to files
+save_rsa_key(user2_private_key, 'user2_private_key.pem')  # Save user 2's private key
+save_rsa_key(user2_public_key, 'user2_public_key.pem', private_key=False)  # Save user 2's public key
+
+# This line of code sign the encrypted data for both users and save the signatures
+signature_user1 = sign_data(user1_private_key, encrypted_data_user1)  # Sign data for user 1
+signature_user2 = sign_data(user2_private_key, encrypted_data_user2)  # Sign data for user 2
+
+# These lines of code save signatures to files
+with open('signature_user1.bin', 'wb') as file:  # Save user 1's signature
+    file.write(signature_user1)
+with open('signature_user2.bin', 'wb') as file:  # Save user 2's signature
+    file.write(signature_user2)
+
+# Verify signatures for both users and print
